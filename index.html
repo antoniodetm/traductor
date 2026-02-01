@@ -4,64 +4,34 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <title>Traductor Instantáneo</title>
+    <title>Traductor Voz Fix</title>
     <style>
-        :root {
-            --primary: #0a84ff;
-            --bg: #f2f2f7;
-            --card: #ffffff;
-            --text: #000000;
-            --safe-top: env(safe-area-inset-top);
-            --safe-bottom: env(safe-area-inset-bottom);
-        }
-        @media (prefers-color-scheme: dark) {
-            :root { --bg: #000000; --card: #1c1c1e; --text: #ffffff; }
-        }
-        body {
-            font-family: -apple-system, sans-serif;
-            background-color: var(--bg);
-            color: var(--text);
-            margin: 0;
-            display: flex;
-            flex-direction: column;
-            height: 100vh;
-            overflow: hidden;
-        }
+        :root { --primary: #0a84ff; --bg: #f2f2f7; --card: #ffffff; --text: #000000; --safe-top: env(safe-area-inset-top); --safe-bottom: env(safe-area-inset-bottom); }
+        @media (prefers-color-scheme: dark) { :root { --bg: #000000; --card: #1c1c1e; --text: #ffffff; } }
+        body { font-family: -apple-system, sans-serif; background-color: var(--bg); color: var(--text); margin: 0; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
         .header { padding-top: calc(10px + var(--safe-top)); padding-bottom: 15px; text-align: center; background: var(--card); border-bottom: 0.5px solid #3c3c434d; }
         .content { flex: 1; display: flex; flex-direction: column; padding: 15px; gap: 15px; }
-        .box-top { background: var(--card); padding: 15px; border-radius: 14px; min-height: 50px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
-        .box-main { 
-            background: var(--card); 
-            padding: 20px; 
-            border-radius: 18px; 
-            flex: 1; 
-            box-shadow: 0 2px 12px rgba(0,0,0,0.1); 
-            border-left: 5px solid var(--primary);
-            display: flex;
-            align-items: flex-start;
-        }
+        .box { background: var(--card); padding: 15px; border-radius: 14px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+        .box-main { flex: 1; border-left: 5px solid var(--primary); }
         .label { font-size: 0.7rem; font-weight: 700; color: #8e8e93; text-transform: uppercase; margin-bottom: 8px; display: block; }
-        p { font-size: 1.3rem; line-height: 1.4; margin: 0; transition: opacity 0.2s; }
+        p { font-size: 1.2rem; line-height: 1.4; margin: 0; }
         .footer { padding: 15px 20px calc(15px + var(--safe-bottom)); background: var(--card); border-top: 0.5px solid #3c3c434d; }
-        button { width: 100%; height: 64px; border-radius: 16px; border: none; background: var(--primary); color: white; font-size: 1.2rem; font-weight: 600; }
+        button { width: 100%; height: 64px; border-radius: 16px; border: none; background: var(--primary); color: white; font-size: 1.2rem; font-weight: 600; cursor: pointer; }
         button.listening { background: #ff453a; }
-        .interim { opacity: 0.6; font-style: italic; }
     </style>
 </head>
 <body>
 
-<div class="header"><h3 style="margin:0">Live Translate</h3></div>
+<div class="header"><h3 style="margin:0">Traductor con Voz</h3></div>
 
 <div class="content">
-    <div class="box-top">
+    <div class="box">
         <span class="label">Escuchando...</span>
-        <p id="originalText" style="font-size: 1rem; color: #8e8e93;">...</p>
+        <p id="originalText">...</p>
     </div>
-    <div class="box-main">
-        <div>
-            <span class="label">Traducción Instantánea</span>
-            <p id="translatedText">Pulsa el botón.</p>
-        </div>
+    <div class="box box-main">
+        <span class="label">Traducción:</span>
+        <p id="translatedText">Pulsa el botón.</p>
     </div>
 </div>
 
@@ -74,40 +44,38 @@
 
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     const recognition = new SpeechRecognition();
-    
     recognition.lang = 'en-US';
     recognition.continuous = true;
     recognition.interimResults = true;
 
     let isListening = false;
-    let translationTimeout;
-    let lastTranslatedText = "";
+    let synth = window.speechSynthesis;
 
-    async function translate(text, isFinal) {
-        if (!text || text === lastTranslatedText) return;
+    // --- FUNCIÓN CRÍTICA PARA IPHONE ---
+    function hablar(texto) {
+        if (synth.speaking) synth.cancel(); // Detener lo anterior
         
-        try {
-            const res = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=en|es`);
-            const data = await res.json();
-            const result = data.responseData.translatedText;
-            
-            translatedText.innerText = result;
-            translatedText.classList.toggle('interim', !isFinal);
-            lastTranslatedText = text;
+        const utterance = new SpeechSynthesisUtterance(texto);
+        utterance.lang = 'es-ES';
+        
+        // Buscamos una voz en español disponible en el sistema
+        const voices = synth.getVoices();
+        const spanishVoice = voices.find(v => v.lang.includes('es'));
+        if (spanishVoice) utterance.voice = spanishVoice;
 
-            if (isFinal) {
-                const utterance = new SpeechSynthesisUtterance(result);
-                utterance.lang = 'es-ES';
-                window.speechSynthesis.speak(utterance);
-            }
-        } catch (e) { console.error("Error API"); }
+        utterance.rate = 1.0;
+        synth.speak(utterance);
     }
 
     btn.onclick = () => {
+        // En iOS el audio se "desbloquea" al interactuar con un botón
+        // Reproducimos un silencio para que Safari abra el canal de audio
+        const silentUtterance = new SpeechSynthesisUtterance("");
+        synth.speak(silentUtterance);
+
         if (!isListening) {
             originalText.innerText = "...";
             translatedText.innerText = "Escuchando...";
-            window.speechSynthesis.cancel();
             recognition.start();
         } else {
             recognition.stop();
@@ -117,9 +85,9 @@
     recognition.onstart = () => { isListening = true; btn.innerText = "Detener"; btn.classList.add('listening'); };
     recognition.onend = () => { isListening = false; btn.innerText = "Iniciar Escucha"; btn.classList.remove('listening'); };
 
-    recognition.onresult = (event) => {
-        let interimTranscript = '';
+    recognition.onresult = async (event) => {
         let finalTranscript = '';
+        let interimTranscript = '';
 
         for (let i = event.resultIndex; i < event.results.length; ++i) {
             if (event.results[i].isFinal) {
@@ -129,15 +97,23 @@
             }
         }
 
-        const currentText = finalTranscript || interimTranscript;
-        originalText.innerText = currentText;
+        if (interimTranscript) originalText.innerText = interimTranscript;
 
-        // Lógica "Real-Time": Si hay texto intermedio, esperamos un poco y traducimos
-        clearTimeout(translationTimeout);
-        translationTimeout = setTimeout(() => {
-            translate(currentText, finalTranscript !== "");
-        }, 700); // 700ms de espera para no saturar y parecer fluido
+        if (finalTranscript !== "") {
+            originalText.innerText = finalTranscript;
+            try {
+                const res = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(finalTranscript)}&langpair=en|es`);
+                const data = await res.json();
+                const result = data.responseData.translatedText;
+                
+                translatedText.innerText = result;
+                hablar(result); // Hablar cuando la frase es final
+            } catch (e) { console.error("Error"); }
+        }
     };
+
+    // Forzar carga de voces (importante para Chrome/Safari)
+    window.speechSynthesis.getVoices();
 </script>
 </body>
 </html>
