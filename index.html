@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <title>Traductor Instantáneo Silencioso</title>
+    <title>Traductor Bidireccional</title>
     <style>
         :root { 
             --primary: #0a84ff; 
@@ -30,9 +30,32 @@
         .header { 
             padding-top: calc(10px + var(--safe-top)); 
             padding-bottom: 15px; 
-            text-align: center; 
             background: var(--card); 
-            border-bottom: 0.5px solid #3c3c434d; 
+            border-bottom: 0.5px solid #3c3c434d;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 15px;
+        }
+        .lang-badge {
+            padding: 8px 16px;
+            background: var(--bg);
+            border-radius: 20px;
+            font-weight: 600;
+            font-size: 0.9rem;
+            border: 1px solid #3c3c434d;
+        }
+        .swap-btn {
+            background: var(--primary);
+            color: white;
+            border: none;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            font-size: 1.2rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
         .content { 
             flex: 1; 
@@ -40,25 +63,18 @@
             flex-direction: column; 
             padding: 15px; 
             gap: 15px; 
-            overflow: hidden;
         }
-        .box-top { 
+        .box { 
             background: var(--card); 
-            padding: 12px; 
-            border-radius: 12px; 
-            min-height: 40px; 
-            flex-shrink: 0;
+            padding: 15px; 
+            border-radius: 18px; 
             box-shadow: 0 2px 8px rgba(0,0,0,0.05); 
         }
+        .box-top { min-height: 60px; flex-shrink: 0; }
         .box-main { 
-            background: var(--card); 
-            padding: 20px; 
-            border-radius: 18px; 
             flex: 1; 
-            box-shadow: 0 2px 12px rgba(0,0,0,0.1); 
             border-left: 5px solid var(--primary); 
             overflow-y: auto;
-            scroll-behavior: smooth;
         }
         .label { 
             font-size: 0.7rem; 
@@ -68,13 +84,13 @@
             margin-bottom: 8px; 
             display: block; 
         }
-        p { font-size: 1.4rem; line-height: 1.4; margin: 0; font-weight: 500; }
+        p { font-size: 1.3rem; line-height: 1.4; margin: 0; }
         .footer { 
             padding: 15px 20px calc(15px + var(--safe-bottom)); 
             background: var(--card); 
             border-top: 0.5px solid #3c3c434d; 
         }
-        button { 
+        .main-btn { 
             width: 100%; 
             height: 64px; 
             border-radius: 16px; 
@@ -84,58 +100,92 @@
             font-size: 1.2rem; 
             font-weight: 600; 
         }
-        button.listening { background: #ff453a; }
+        .main-btn.listening { background: #ff453a; }
     </style>
 </head>
 <body>
 
-<div class="header"><h3 style="margin:0">Traductor Live</h3></div>
+<div class="header">
+    <div class="lang-badge" id="langFromLabel">EN</div>
+    <button class="swap-btn" id="swapBtn">⇄</button>
+    <div class="lang-badge" id="langToLabel">ES</div>
+</div>
 
 <div class="content">
-    <div class="box-top">
-        <span class="label">Oigo (EN):</span>
+    <div class="box box-top">
+        <span class="label" id="inputLabel">Escuchando Inglés:</span>
         <p id="originalText" style="font-size: 1rem; color: #8e8e93;">...</p>
     </div>
-    <div class="box-main" id="scrollContainer">
-        <span class="label">Traducción (ES):</span>
-        <p id="translatedText">Presiona iniciar para traducir simultáneamente.</p>
+    <div class="box box-main" id="scrollContainer">
+        <span class="label" id="outputLabel">Traducción Español:</span>
+        <p id="translatedText">Pulsa el botón para empezar.</p>
     </div>
 </div>
 
-<div class="footer"><button id="btn">Iniciar Escucha</button></div>
+<div class="footer">
+    <button class="main-btn" id="listenBtn">Iniciar Escucha</button>
+</div>
 
 <script>
-    const btn = document.getElementById('btn');
+    const listenBtn = document.getElementById('listenBtn');
+    const swapBtn = document.getElementById('swapBtn');
     const originalText = document.getElementById('originalText');
     const translatedText = document.getElementById('translatedText');
-    const scrollContainer = document.getElementById('scrollContainer');
+    const langFromLabel = document.getElementById('langFromLabel');
+    const langToLabel = document.getElementById('langToLabel');
+    const inputLabel = document.getElementById('inputLabel');
+    const outputLabel = document.getElementById('outputLabel');
+
+    let isEnglishToSpanish = true;
+    let isListening = false;
+    let lastText = "";
 
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     const recognition = new SpeechRecognition();
-    recognition.lang = 'en-US';
     recognition.continuous = true;
     recognition.interimResults = true;
 
-    let isListening = false;
-    let lastText = "";
+    function updateLabels() {
+        if (isEnglishToSpanish) {
+            recognition.lang = 'en-US';
+            langFromLabel.innerText = "EN";
+            langToLabel.innerText = "ES";
+            inputLabel.innerText = "Escuchando Inglés:";
+            outputLabel.innerText = "Traducción Español:";
+        } else {
+            recognition.lang = 'es-ES';
+            langFromLabel.innerText = "ES";
+            langToLabel.innerText = "EN";
+            inputLabel.innerText = "Escuchando Español:";
+            outputLabel.innerText = "Traducción Inglés:";
+        }
+    }
+
+    updateLabels();
+
+    swapBtn.onclick = () => {
+        isEnglishToSpanish = !isEnglishToSpanish;
+        updateLabels();
+        if (isListening) {
+            recognition.stop(); // Reinicia con el nuevo idioma
+            setTimeout(() => recognition.start(), 300);
+        }
+    };
 
     async function traducir(texto) {
         if (!texto || texto === lastText) return;
         lastText = texto;
 
+        const pair = isEnglishToSpanish ? "en|es" : "es|en";
         try {
-            const res = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(texto)}&langpair=en|es`);
+            const res = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(texto)}&langpair=${pair}`);
             const data = await res.json();
-            const translation = data.responseData.translatedText;
-            
-            translatedText.innerText = translation;
-
-            // Auto-scroll al final
-            scrollContainer.scrollTop = scrollContainer.scrollHeight;
-        } catch (e) { console.error("Error API"); }
+            translatedText.innerText = data.responseData.translatedText;
+            document.getElementById('scrollContainer').scrollTop = document.getElementById('scrollContainer').scrollHeight;
+        } catch (e) { console.error("Error"); }
     }
 
-    btn.onclick = () => {
+    listenBtn.onclick = () => {
         if (!isListening) {
             originalText.innerText = "...";
             translatedText.innerText = "Escuchando...";
@@ -147,35 +197,25 @@
 
     recognition.onstart = () => { 
         isListening = true; 
-        btn.innerText = "Detener"; 
-        btn.classList.add('listening'); 
+        listenBtn.innerText = "Detener"; 
+        listenBtn.classList.add('listening'); 
     };
-
     recognition.onend = () => { 
         isListening = false; 
-        btn.innerText = "Iniciar Escucha"; 
-        btn.classList.remove('listening'); 
+        listenBtn.innerText = "Iniciar Escucha"; 
+        listenBtn.classList.remove('listening'); 
     };
 
     recognition.onresult = (event) => {
-        let interimTranscript = '';
-        let finalTranscript = '';
-
+        let interim = '';
+        let final = '';
         for (let i = event.resultIndex; i < event.results.length; ++i) {
-            if (event.results[i].isFinal) {
-                finalTranscript = event.results[i][0].transcript;
-            } else {
-                interimTranscript += event.results[i][0].transcript;
-            }
+            if (event.results[i].isFinal) final = event.results[i][0].transcript;
+            else interim += event.results[i][0].transcript;
         }
-
-        const currentText = finalTranscript || interimTranscript;
-        originalText.innerText = currentText;
-
-        // Traduce si hay una frase final o si la frase acumulada es larga (> 3 palabras)
-        if (finalTranscript !== "" || (interimTranscript.split(' ').length > 3)) {
-            traducir(currentText);
-        }
+        const text = final || interim;
+        originalText.innerText = text;
+        if (final !== "" || (interim.split(' ').length > 3)) traducir(text);
     };
 </script>
 </body>
