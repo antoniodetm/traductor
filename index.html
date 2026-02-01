@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <title>Traductor Voz Fix</title>
+    <title>Traductor Instantáneo</title>
     <style>
         :root { --primary: #0a84ff; --bg: #f2f2f7; --card: #ffffff; --text: #000000; --safe-top: env(safe-area-inset-top); --safe-bottom: env(safe-area-inset-bottom); }
         @media (prefers-color-scheme: dark) { :root { --bg: #000000; --card: #1c1c1e; --text: #ffffff; } }
@@ -12,26 +12,26 @@
         .header { padding-top: calc(10px + var(--safe-top)); padding-bottom: 15px; text-align: center; background: var(--card); border-bottom: 0.5px solid #3c3c434d; }
         .content { flex: 1; display: flex; flex-direction: column; padding: 15px; gap: 15px; }
         .box { background: var(--card); padding: 15px; border-radius: 14px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
-        .box-main { flex: 1; border-left: 5px solid var(--primary); }
+        .box-main { flex: 1; border-left: 5px solid var(--primary); overflow-y: auto; }
         .label { font-size: 0.7rem; font-weight: 700; color: #8e8e93; text-transform: uppercase; margin-bottom: 8px; display: block; }
-        p { font-size: 1.2rem; line-height: 1.4; margin: 0; }
+        p { font-size: 1.3rem; line-height: 1.4; margin: 0; }
         .footer { padding: 15px 20px calc(15px + var(--safe-bottom)); background: var(--card); border-top: 0.5px solid #3c3c434d; }
-        button { width: 100%; height: 64px; border-radius: 16px; border: none; background: var(--primary); color: white; font-size: 1.2rem; font-weight: 600; cursor: pointer; }
+        button { width: 100%; height: 64px; border-radius: 16px; border: none; background: var(--primary); color: white; font-size: 1.2rem; font-weight: 600; }
         button.listening { background: #ff453a; }
     </style>
 </head>
 <body>
 
-<div class="header"><h3 style="margin:0">Traductor con Voz</h3></div>
+<div class="header"><h3 style="margin:0">Traducción Pro</h3></div>
 
 <div class="content">
     <div class="box">
-        <span class="label">Escuchando...</span>
-        <p id="originalText">...</p>
+        <span class="label">Inglés:</span>
+        <p id="originalText" style="font-size: 1rem; color: #8e8e93;">...</p>
     </div>
     <div class="box box-main">
-        <span class="label">Traducción:</span>
-        <p id="translatedText">Pulsa el botón.</p>
+        <span class="label">Español (Voz):</span>
+        <p id="translatedText">Esperando voz...</p>
     </div>
 </div>
 
@@ -49,30 +49,35 @@
     recognition.interimResults = true;
 
     let isListening = false;
+    let lastProcessed = "";
     let synth = window.speechSynthesis;
 
-    // --- FUNCIÓN CRÍTICA PARA IPHONE ---
     function hablar(texto) {
-        if (synth.speaking) synth.cancel(); // Detener lo anterior
-        
+        if (!texto) return;
+        synth.cancel(); 
         const utterance = new SpeechSynthesisUtterance(texto);
         utterance.lang = 'es-ES';
-        
-        // Buscamos una voz en español disponible en el sistema
-        const voices = synth.getVoices();
-        const spanishVoice = voices.find(v => v.lang.includes('es'));
-        if (spanishVoice) utterance.voice = spanishVoice;
-
-        utterance.rate = 1.0;
         synth.speak(utterance);
     }
 
-    btn.onclick = () => {
-        // En iOS el audio se "desbloquea" al interactuar con un botón
-        // Reproducimos un silencio para que Safari abra el canal de audio
-        const silentUtterance = new SpeechSynthesisUtterance("");
-        synth.speak(silentUtterance);
+    async function pedirTraduccion(texto) {
+        if (texto.trim() === lastProcessed) return;
+        lastProcessed = texto.trim();
 
+        try {
+            const res = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(texto)}&langpair=en|es`);
+            const data = await res.json();
+            const result = data.responseData.translatedText;
+            
+            translatedText.innerText = result;
+            hablar(result);
+        } catch (e) { console.error("Error API"); }
+    }
+
+    btn.onclick = () => {
+        // Desbloqueo de audio para iPhone
+        synth.speak(new SpeechSynthesisUtterance(""));
+        
         if (!isListening) {
             originalText.innerText = "...";
             translatedText.innerText = "Escuchando...";
@@ -85,9 +90,9 @@
     recognition.onstart = () => { isListening = true; btn.innerText = "Detener"; btn.classList.add('listening'); };
     recognition.onend = () => { isListening = false; btn.innerText = "Iniciar Escucha"; btn.classList.remove('listening'); };
 
-    recognition.onresult = async (event) => {
-        let finalTranscript = '';
+    recognition.onresult = (event) => {
         let interimTranscript = '';
+        let finalTranscript = '';
 
         for (let i = event.resultIndex; i < event.results.length; ++i) {
             if (event.results[i].isFinal) {
@@ -97,23 +102,16 @@
             }
         }
 
-        if (interimTranscript) originalText.innerText = interimTranscript;
+        const currentText = finalTranscript || interimTranscript;
+        originalText.innerText = currentText;
 
-        if (finalTranscript !== "") {
-            originalText.innerText = finalTranscript;
-            try {
-                const res = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(finalTranscript)}&langpair=en|es`);
-                const data = await res.json();
-                const result = data.responseData.translatedText;
-                
-                translatedText.innerText = result;
-                hablar(result); // Hablar cuando la frase es final
-            } catch (e) { console.error("Error"); }
+        // --- TRUCO DE SIMULTANEIDAD ---
+        // Si detectamos que la frase ha terminado (finalTranscript) 
+        // o si la frase interina es lo suficientemente larga, disparamos traducción.
+        if (finalTranscript !== "" || (interimTranscript.split(' ').length > 4)) {
+            pedirTraduccion(currentText);
         }
     };
-
-    // Forzar carga de voces (importante para Chrome/Safari)
-    window.speechSynthesis.getVoices();
 </script>
 </body>
 </html>
