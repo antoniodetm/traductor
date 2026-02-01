@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <title>Traductor Full Screen</title>
+    <title>Traductor con Voz</title>
     <style>
         :root {
             --primary: #0a84ff;
@@ -32,7 +32,7 @@
             display: flex;
             flex-direction: column;
             height: 100vh;
-            overflow: hidden; /* Evita el rebote de toda la página */
+            overflow: hidden;
         }
 
         .header {
@@ -41,7 +41,6 @@
             text-align: center;
             background: var(--card);
             border-bottom: 0.5px solid #3c3c434d;
-            z-index: 10;
         }
 
         .content {
@@ -50,27 +49,25 @@
             flex-direction: column;
             padding: 15px;
             gap: 15px;
-            overflow: hidden; /* El contenedor no scrollea, scrollean las cajas internas */
+            overflow: hidden;
         }
 
-        /* Caja de texto original (pequeña arriba) */
         .box-top {
             background: var(--card);
             padding: 15px;
             border-radius: 14px;
-            height: 80px;
+            height: 60px;
             overflow-y: auto;
-            flex-shrink: 0; /* No se encoge */
+            flex-shrink: 0;
             box-shadow: 0 2px 8px rgba(0,0,0,0.05);
         }
 
-        /* Caja de traducción (OCUPA TODO EL ESPACIO RESTANTE) */
         .box-main {
             background: var(--card);
             padding: 20px;
             border-radius: 18px;
-            flex: 1; /* Se expande para llenar el hueco */
-            overflow-y: auto; /* Permite scroll interno */
+            flex: 1;
+            overflow-y: auto;
             display: flex;
             flex-direction: column;
             box-shadow: 0 2px 12px rgba(0,0,0,0.1);
@@ -84,21 +81,12 @@
             color: #8e8e93;
             text-transform: uppercase;
             margin-bottom: 8px;
-            position: sticky;
-            top: 0;
-            background: var(--card);
         }
 
         p {
             font-size: 1.2rem;
             line-height: 1.5;
             margin: 0;
-            word-wrap: break-word;
-        }
-
-        #translatedText {
-            color: var(--text);
-            padding-bottom: 20px;
         }
 
         .footer {
@@ -117,15 +105,13 @@
             font-size: 1.2rem;
             font-weight: 600;
             -webkit-tap-highlight-color: transparent;
-            transition: transform 0.1s;
         }
 
-        button:active { transform: scale(0.97); }
         button.listening { background: #ff453a; animation: pulse 1.5s infinite; }
 
         @keyframes pulse {
             0% { opacity: 1; }
-            50% { opacity: 0.8; }
+            50% { opacity: 0.7; }
             100% { opacity: 1; }
         }
     </style>
@@ -133,18 +119,18 @@
 <body>
 
 <div class="header">
-    <h3 style="margin:0">Traductor Live</h3>
+    <h3 style="margin:0">Traductor Parlante</h3>
 </div>
 
 <div class="content">
     <div class="box-top">
-        <span class="label">Inglés Detectado</span>
-        <p id="originalText" style="font-size: 1rem; color: #8e8e93;">Esperando...</p>
+        <span class="label">Oigo (Inglés):</span>
+        <p id="originalText" style="font-size: 0.9rem; color: #8e8e93;">...</p>
     </div>
 
     <div class="box-main" id="scrollContainer">
-        <span class="label">Traducción al Español</span>
-        <p id="translatedText">Pulsa el botón e inicia una conversación en inglés. El texto traducido aparecerá aquí y se guardará mientras hablas.</p>
+        <span class="label">Traducción (Español):</span>
+        <p id="translatedText">Presiona el botón. Traduciré y leeré en voz alta lo que digas en inglés.</p>
     </div>
 </div>
 
@@ -166,19 +152,31 @@
     recognition.interimResults = true;
 
     let isListening = false;
-    let fullTranslation = ""; // Acumulador de texto
+    let fullTranslation = "";
+
+    // FUNCIÓN PARA HABLAR
+    function hablar(texto) {
+        const mensaje = new SpeechSynthesisUtterance(texto);
+        mensaje.lang = 'es-ES'; // Voz en español
+        mensaje.rate = 1.0;    // Velocidad normal
+        mensaje.pitch = 1.0;   // Tono normal
+        window.speechSynthesis.speak(mensaje);
+    }
 
     btn.onclick = () => {
+        // En iOS, la síntesis de voz debe ser activada por una acción del usuario
+        // Al pulsar el botón la primera vez, desbloqueamos el audio.
         if (!isListening) {
             recognition.start();
         } else {
             recognition.stop();
+            window.speechSynthesis.cancel(); // Detener el habla si paramos
         }
     };
 
     recognition.onstart = () => {
         isListening = true;
-        btn.innerText = "Detener";
+        btn.innerText = "Detener y Silenciar";
         btn.classList.add('listening');
     };
 
@@ -189,8 +187,8 @@
     };
 
     recognition.onresult = async (event) => {
-        let interimTranscript = '';
         let finalTranscript = '';
+        let interimTranscript = '';
 
         for (let i = event.resultIndex; i < event.results.length; ++i) {
             if (event.results[i].isFinal) {
@@ -200,10 +198,8 @@
             }
         }
 
-        // Mostrar lo que se oye en tiempo real (pequeño arriba)
         if (interimTranscript) originalText.innerText = interimTranscript;
 
-        // Cuando la frase es final, traducimos y acumulamos
         if (finalTranscript !== "") {
             originalText.innerText = finalTranscript;
             
@@ -212,16 +208,18 @@
                 const data = await res.json();
                 const newTranslation = data.responseData.translatedText;
 
-                // Acumular el texto para que no se borre lo anterior
-                fullTranslation += " " + newTranslation;
+                // 1. Mostrar texto
+                fullTranslation += (fullTranslation ? " " : "") + newTranslation;
                 translatedText.innerText = fullTranslation;
 
-                // AUTO-SCROLL: Baja al final de la caja automáticamente
+                // 2. Auto-scroll
                 setTimeout(() => {
                     scrollContainer.scrollTop = scrollContainer.scrollHeight;
                 }, 100);
 
-                // Feedback táctil
+                // 3. HABLAR LA TRADUCCIÓN
+                hablar(newTranslation);
+
                 if (navigator.vibrate) navigator.vibrate(40);
                 
             } catch (e) {
