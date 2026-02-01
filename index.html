@@ -4,34 +4,101 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <title>Traductor Instantáneo</title>
+    <title>Traductor Instantáneo Silencioso</title>
     <style>
-        :root { --primary: #0a84ff; --bg: #f2f2f7; --card: #ffffff; --text: #000000; --safe-top: env(safe-area-inset-top); --safe-bottom: env(safe-area-inset-bottom); }
-        @media (prefers-color-scheme: dark) { :root { --bg: #000000; --card: #1c1c1e; --text: #ffffff; } }
-        body { font-family: -apple-system, sans-serif; background-color: var(--bg); color: var(--text); margin: 0; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
-        .header { padding-top: calc(10px + var(--safe-top)); padding-bottom: 15px; text-align: center; background: var(--card); border-bottom: 0.5px solid #3c3c434d; }
-        .content { flex: 1; display: flex; flex-direction: column; padding: 15px; gap: 15px; }
-        .box { background: var(--card); padding: 15px; border-radius: 14px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
-        .box-main { flex: 1; border-left: 5px solid var(--primary); overflow-y: auto; }
-        .label { font-size: 0.7rem; font-weight: 700; color: #8e8e93; text-transform: uppercase; margin-bottom: 8px; display: block; }
-        p { font-size: 1.3rem; line-height: 1.4; margin: 0; }
-        .footer { padding: 15px 20px calc(15px + var(--safe-bottom)); background: var(--card); border-top: 0.5px solid #3c3c434d; }
-        button { width: 100%; height: 64px; border-radius: 16px; border: none; background: var(--primary); color: white; font-size: 1.2rem; font-weight: 600; }
+        :root { 
+            --primary: #0a84ff; 
+            --bg: #f2f2f7; 
+            --card: #ffffff; 
+            --text: #000000; 
+            --safe-top: env(safe-area-inset-top); 
+            --safe-bottom: env(safe-area-inset-bottom); 
+        }
+        @media (prefers-color-scheme: dark) { 
+            :root { --bg: #000000; --card: #1c1c1e; --text: #ffffff; } 
+        }
+        body { 
+            font-family: -apple-system, sans-serif; 
+            background-color: var(--bg); 
+            color: var(--text); 
+            margin: 0; 
+            display: flex; 
+            flex-direction: column; 
+            height: 100vh; 
+            overflow: hidden; 
+        }
+        .header { 
+            padding-top: calc(10px + var(--safe-top)); 
+            padding-bottom: 15px; 
+            text-align: center; 
+            background: var(--card); 
+            border-bottom: 0.5px solid #3c3c434d; 
+        }
+        .content { 
+            flex: 1; 
+            display: flex; 
+            flex-direction: column; 
+            padding: 15px; 
+            gap: 15px; 
+            overflow: hidden;
+        }
+        .box-top { 
+            background: var(--card); 
+            padding: 12px; 
+            border-radius: 12px; 
+            min-height: 40px; 
+            flex-shrink: 0;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05); 
+        }
+        .box-main { 
+            background: var(--card); 
+            padding: 20px; 
+            border-radius: 18px; 
+            flex: 1; 
+            box-shadow: 0 2px 12px rgba(0,0,0,0.1); 
+            border-left: 5px solid var(--primary); 
+            overflow-y: auto;
+            scroll-behavior: smooth;
+        }
+        .label { 
+            font-size: 0.7rem; 
+            font-weight: 700; 
+            color: #8e8e93; 
+            text-transform: uppercase; 
+            margin-bottom: 8px; 
+            display: block; 
+        }
+        p { font-size: 1.4rem; line-height: 1.4; margin: 0; font-weight: 500; }
+        .footer { 
+            padding: 15px 20px calc(15px + var(--safe-bottom)); 
+            background: var(--card); 
+            border-top: 0.5px solid #3c3c434d; 
+        }
+        button { 
+            width: 100%; 
+            height: 64px; 
+            border-radius: 16px; 
+            border: none; 
+            background: var(--primary); 
+            color: white; 
+            font-size: 1.2rem; 
+            font-weight: 600; 
+        }
         button.listening { background: #ff453a; }
     </style>
 </head>
 <body>
 
-<div class="header"><h3 style="margin:0">Traducción Pro</h3></div>
+<div class="header"><h3 style="margin:0">Traductor Live</h3></div>
 
 <div class="content">
-    <div class="box">
-        <span class="label">Inglés:</span>
+    <div class="box-top">
+        <span class="label">Oigo (EN):</span>
         <p id="originalText" style="font-size: 1rem; color: #8e8e93;">...</p>
     </div>
-    <div class="box box-main">
-        <span class="label">Español (Voz):</span>
-        <p id="translatedText">Esperando voz...</p>
+    <div class="box-main" id="scrollContainer">
+        <span class="label">Traducción (ES):</span>
+        <p id="translatedText">Presiona iniciar para traducir simultáneamente.</p>
     </div>
 </div>
 
@@ -41,6 +108,7 @@
     const btn = document.getElementById('btn');
     const originalText = document.getElementById('originalText');
     const translatedText = document.getElementById('translatedText');
+    const scrollContainer = document.getElementById('scrollContainer');
 
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     const recognition = new SpeechRecognition();
@@ -49,35 +117,25 @@
     recognition.interimResults = true;
 
     let isListening = false;
-    let lastProcessed = "";
-    let synth = window.speechSynthesis;
+    let lastText = "";
 
-    function hablar(texto) {
-        if (!texto) return;
-        synth.cancel(); 
-        const utterance = new SpeechSynthesisUtterance(texto);
-        utterance.lang = 'es-ES';
-        synth.speak(utterance);
-    }
-
-    async function pedirTraduccion(texto) {
-        if (texto.trim() === lastProcessed) return;
-        lastProcessed = texto.trim();
+    async function traducir(texto) {
+        if (!texto || texto === lastText) return;
+        lastText = texto;
 
         try {
             const res = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(texto)}&langpair=en|es`);
             const data = await res.json();
-            const result = data.responseData.translatedText;
+            const translation = data.responseData.translatedText;
             
-            translatedText.innerText = result;
-            hablar(result);
+            translatedText.innerText = translation;
+
+            // Auto-scroll al final
+            scrollContainer.scrollTop = scrollContainer.scrollHeight;
         } catch (e) { console.error("Error API"); }
     }
 
     btn.onclick = () => {
-        // Desbloqueo de audio para iPhone
-        synth.speak(new SpeechSynthesisUtterance(""));
-        
         if (!isListening) {
             originalText.innerText = "...";
             translatedText.innerText = "Escuchando...";
@@ -87,8 +145,17 @@
         }
     };
 
-    recognition.onstart = () => { isListening = true; btn.innerText = "Detener"; btn.classList.add('listening'); };
-    recognition.onend = () => { isListening = false; btn.innerText = "Iniciar Escucha"; btn.classList.remove('listening'); };
+    recognition.onstart = () => { 
+        isListening = true; 
+        btn.innerText = "Detener"; 
+        btn.classList.add('listening'); 
+    };
+
+    recognition.onend = () => { 
+        isListening = false; 
+        btn.innerText = "Iniciar Escucha"; 
+        btn.classList.remove('listening'); 
+    };
 
     recognition.onresult = (event) => {
         let interimTranscript = '';
@@ -105,11 +172,9 @@
         const currentText = finalTranscript || interimTranscript;
         originalText.innerText = currentText;
 
-        // --- TRUCO DE SIMULTANEIDAD ---
-        // Si detectamos que la frase ha terminado (finalTranscript) 
-        // o si la frase interina es lo suficientemente larga, disparamos traducción.
-        if (finalTranscript !== "" || (interimTranscript.split(' ').length > 4)) {
-            pedirTraduccion(currentText);
+        // Traduce si hay una frase final o si la frase acumulada es larga (> 3 palabras)
+        if (finalTranscript !== "" || (interimTranscript.split(' ').length > 3)) {
+            traducir(currentText);
         }
     };
 </script>
