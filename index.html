@@ -46,6 +46,16 @@
             justify-content: center;
             align-items: center;
             gap: 10px;
+            position: relative;
+        }
+
+        .version {
+            position: absolute;
+            top: calc(5px + var(--safe-top));
+            right: 15px;
+            font-size: 0.6rem;
+            color: #8e8e93;
+            font-weight: 600;
         }
 
         .title {
@@ -153,7 +163,6 @@
             border-top: 0.5px solid #3c3c434d;
         }
 
-        /* Vúmetro */
         .volume-meter {
             width: 100%;
             height: 4px;
@@ -190,6 +199,7 @@
 <body>
 
     <div class="header">
+        <div class="version">v2.1.1</div>
         <h1 class="title">Traductor</h1>
         <div class="lang-selector">
             <div class="lang-badge" id="langFromLabel">EN</div>
@@ -241,7 +251,7 @@
         let interimOriginal = "";
         let interimTranslated = "";
         let translationTimeout;
-        let audioContext, analyser, dataArray;
+        let audioContext, analyser, dataArray, micStream;
 
         const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -252,25 +262,25 @@
             entry.innerText = `[${time}] ${msg}`;
             logBox.appendChild(entry);
             logBox.scrollTop = logBox.scrollHeight;
-            if (logBox.children.length > 20) logBox.removeChild(logBox.firstChild);
+            if (logBox.children.length > 25) logBox.removeChild(logBox.firstChild);
         }
 
-        // Intentar activar Auto Gain Control mediante MediaDevices
         async function initAudioMeter() {
+            if (audioContext) return;
             try {
-                const stream = await navigator.mediaDevices.getUserMedia({
+                micStream = await navigator.mediaDevices.getUserMedia({
                     audio: { autoGainControl: true, noiseSuppression: true, echoCancellation: true }
                 });
                 audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                const source = audioContext.createMediaStreamSource(stream);
+                const source = audioContext.createMediaStreamSource(micStream);
                 analyser = audioContext.createAnalyser();
                 analyser.fftSize = 256;
                 source.connect(analyser);
                 dataArray = new Uint8Array(analyser.frequencyBinCount);
                 updateVolume();
-                addLog("Vúmetro activado.");
+                addLog("Vúmetro OK.");
             } catch (e) {
-                addLog("Aviso: No se pudo activar vúmetro.");
+                addLog("Vúmetro No Disp.");
             }
         }
 
@@ -282,16 +292,15 @@
                 let sum = 0;
                 for (let i = 0; i < dataArray.length; i++) sum += dataArray[i];
                 let average = sum / dataArray.length;
-                let vol = Math.min(100, average * 3); // Amplificación visual
+                let vol = Math.min(100, average * 3.5);
                 volumeBar.style.width = vol + "%";
-                // Cambiar color si es muy bajo
-                volumeBar.style.background = vol < 10 ? "#ff9500" : "#34c759";
+                volumeBar.style.background = vol < 15 ? "#ff9500" : "#34c759";
             }
             requestAnimationFrame(updateVolume);
         }
 
         if (!SpeechRecognition) {
-            addLog("ERROR: API no soportada.");
+            addLog("ERROR: API Voz no soportada.");
             listenBtn.disabled = true;
         }
 
@@ -299,6 +308,7 @@
         if (recognition) {
             recognition.continuous = !isIOS;
             recognition.interimResults = true;
+            recognition.maxAlternatives = 1;
         }
 
         function updateLabels() {
@@ -307,8 +317,8 @@
             if (recognition) recognition.lang = isEnglishToSpanish ? 'en-US' : 'es-ES';
             langFromLabel.innerText = from;
             langToLabel.innerText = to;
-            inputLabel.innerText = `Original (${from}):`;
-            outputLabel.innerText = `Traducción (${to}):`;
+            inputLabel.innerText = `Orig (${from}):`;
+            outputLabel.innerText = `Trad (${to}):`;
         }
 
         updateLabels();
@@ -334,19 +344,20 @@
             return "";
         }
 
-        listenBtn.onclick = () => {
+        listenBtn.onclick = async () => {
             if (!recognition) return;
             if (!isListening) {
-                if (!audioContext) initAudioMeter();
+                initAudioMeter();
                 historyOriginal = ""; historyTranslated = ""; interimOriginal = ""; interimTranslated = "";
                 render();
                 try {
                     recognition.start();
-                    addLog("Iniciando escucha...");
-                } catch (e) { addLog("Error: " + e.message); }
+                    addLog("Escuchando...");
+                } catch (e) { addLog("Err: " + e.message); }
             } else {
                 isListening = false;
                 try { recognition.stop(); } catch (e) { }
+                addLog("Parado.");
             }
         };
 
@@ -355,7 +366,7 @@
                 isListening = true;
                 listenBtn.innerText = "Detener";
                 listenBtn.classList.add('listening');
-                addLog("MIC ACTIVO. Habla ahora.");
+                addLog("Mic Activo.");
             };
 
             recognition.onend = () => {
@@ -366,8 +377,12 @@
                 } else {
                     listenBtn.innerText = "Iniciar Escucha";
                     listenBtn.classList.remove('listening');
-                    addLog("Detenido.");
                 }
+            };
+
+            recognition.onerror = (e) => {
+                addLog(`Err Voz: ${e.error}`);
+                if (e.error === 'not-allowed') isListening = false;
             };
 
             recognition.onresult = async (event) => {
@@ -377,6 +392,7 @@
                     if (res.isFinal) {
                         const cleanText = res[0].transcript.trim();
                         if (cleanText) {
+                            addLog(`OK: ${cleanText.substring(0, 15)}...`);
                             historyOriginal += cleanText + ". ";
                             render();
                             const translated = await fetchTranslation(cleanText);
@@ -393,11 +409,11 @@
                     render();
                     clearTimeout(translationTimeout);
                     translationTimeout = setTimeout(async () => {
-                        if (interimOriginal.length > 5 && isListening) {
+                        if (interimOriginal.length > 3 && isListening) {
                             interimTranslated = await fetchTranslation(interimOriginal);
                             render();
                         }
-                    }, 1000);
+                    }, 800);
                 }
             };
         }
