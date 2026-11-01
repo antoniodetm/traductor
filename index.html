@@ -135,7 +135,7 @@
         }
 
         .footer {
-            padding: 15px 20px calc(15px + var(--safe-bottom));
+            padding: 10px 20px calc(10px + var(--safe-bottom));
             background: var(--card);
             border-top: 0.5px solid #3c3c434d;
             text-align: center;
@@ -143,7 +143,7 @@
 
         .main-btn {
             width: 100%;
-            height: 64px;
+            height: 60px;
             border-radius: 16px;
             border: none;
             background: var(--primary);
@@ -159,8 +159,15 @@
         #status {
             font-size: 0.7rem;
             color: #8e8e93;
-            margin-top: 8px;
+            margin-top: 5px;
             font-weight: 500;
+        }
+
+        #debug {
+            font-size: 0.6rem;
+            color: #ff3b30;
+            margin-top: 2px;
+            display: none;
         }
     </style>
 </head>
@@ -190,6 +197,7 @@
     <div class="footer">
         <button class="main-btn" id="listenBtn">Iniciar Escucha</button>
         <div id="status">Listo para traducir</div>
+        <div id="debug"></div>
     </div>
 
     <script>
@@ -204,6 +212,7 @@
         const scrollContainer = document.getElementById('scrollContainer');
         const boxTop = document.getElementById('boxTop');
         const statusLabel = document.getElementById('status');
+        const debugLabel = document.getElementById('debug');
 
         let isEnglishToSpanish = true;
         let isListening = false;
@@ -215,22 +224,26 @@
 
         let translationTimeout;
 
-        // Detección de soporte y protocolo seguro
-        const isSecure = window.location.protocol === 'https:' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+        // Detección de iPhone/iOS
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 
-        if (!SpeechRecognition) {
-            statusLabel.innerText = "Error: Navegador no compatible";
-            translatedText.innerText = "Tu navegador no soporta el reconocimiento de voz. Usa Chrome en Android o Safari en iOS.";
-            listenBtn.disabled = true;
-        } else if (!isSecure) {
-            statusLabel.innerText = "Error: Requiere HTTPS";
-            translatedText.innerText = "El reconocimiento de voz requiere una conexión segura (HTTPS) para funcionar en el móvil.";
+        function logDebug(msg) {
+            console.log(msg);
+            debugLabel.innerText = msg;
+            debugLabel.style.display = "block";
         }
 
+        if (!SpeechRecognition) {
+            statusLabel.innerText = "Error: Navegador incompatible";
+            translatedText.innerText = "Reconocimiento no soportado. Usa Safari en iOS o Chrome en Android.";
+            listenBtn.disabled = true;
+        }
+
+        // En iOS, continuous=true suele fallar. Usamos false y reiniciamos manualmente.
         const recognition = SpeechRecognition ? new SpeechRecognition() : null;
         if (recognition) {
-            recognition.continuous = true;
+            recognition.continuous = !isIOS;
             recognition.interimResults = true;
         }
 
@@ -246,25 +259,9 @@
 
         updateLabels();
 
-        function clearConversation() {
-            historyOriginal = "";
-            historyTranslated = "";
-            interimOriginal = "";
-            interimTranslated = "";
-            render();
-        }
-
-        swapBtn.onclick = () => {
-            isEnglishToSpanish = !isEnglishToSpanish;
-            updateLabels();
-            clearConversation();
-            if (isListening && recognition) try { recognition.stop(); } catch (e) { }
-        };
-
         function render() {
             originalText.innerHTML = historyOriginal + `<span class="interim-text">${interimOriginal}</span>`;
             translatedText.innerHTML = historyTranslated + `<span class="interim-text">${interimTranslated}</span>`;
-
             scrollContainer.scrollTop = scrollContainer.scrollHeight;
             boxTop.scrollTop = boxTop.scrollHeight;
         }
@@ -276,34 +273,27 @@
             try {
                 const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${sl}&tl=${tl}&dt=t&q=${encodeURIComponent(text)}`;
                 const res = await fetch(url);
-                if (res.status === 429) return "[Límite de peticiones]";
+                if (res.status === 429) return "[Límite]";
                 const data = await res.json();
                 if (data && data[0]) return data[0].map(s => s[0]).join('');
-            } catch (e) { return "[Error de conexión]"; }
+            } catch (e) { return "[Error]"; }
             return "";
-        }
-
-        async function translateInterim(text) {
-            clearTimeout(translationTimeout);
-            translationTimeout = setTimeout(async () => {
-                if (!text.trim() || !isListening) return;
-                interimTranslated = await fetchTranslation(text);
-                render();
-            }, 700);
         }
 
         listenBtn.onclick = () => {
             if (!recognition) return;
             if (!isListening) {
-                clearConversation();
+                historyOriginal = ""; historyTranslated = ""; interimOriginal = ""; interimTranslated = "";
+                render();
                 try {
                     recognition.start();
+                    isListening = true;
                 } catch (e) {
-                    statusLabel.innerText = "Error al iniciar";
+                    logDebug("Error start: " + e.message);
                 }
             } else {
                 isListening = false;
-                recognition.stop();
+                try { recognition.stop(); } catch (e) { }
                 statusLabel.innerText = "Detenido";
             }
         };
@@ -314,13 +304,17 @@
                 listenBtn.innerText = "Detener";
                 listenBtn.classList.add('listening');
                 statusLabel.innerText = "Escuchando...";
+                debugLabel.style.display = "none";
             };
 
             recognition.onend = () => {
                 if (isListening) {
+                    // En iOS reiniciamos rápido para simular continuous
                     setTimeout(() => {
-                        if (isListening) try { recognition.start(); } catch (e) { }
-                    }, 250);
+                        if (isListening) {
+                            try { recognition.start(); } catch (e) { logDebug("Restart fail: " + e.message); }
+                        }
+                    }, 100);
                 } else {
                     listenBtn.innerText = "Iniciar Escucha";
                     listenBtn.classList.remove('listening');
@@ -329,51 +323,49 @@
             };
 
             recognition.onerror = (e) => {
-                console.error("Error Speech:", e.error);
-                if (e.error === 'not-allowed') {
-                    isListening = false;
-                    statusLabel.innerText = "Permiso denegado";
-                } else {
-                    statusLabel.innerText = "Error: " + e.error;
-                    if (isListening) setTimeout(() => { try { recognition.start(); } catch (e) { } }, 500);
-                }
+                logDebug("Error: " + e.error);
+                if (e.error === 'not-allowed') isListening = false;
             };
 
             recognition.onresult = async (event) => {
                 let newInterim = "";
                 for (let i = event.resultIndex; i < event.results.length; ++i) {
-                    const transcript = event.results[i][0].transcript;
-                    if (event.results[i].isFinal) {
-                        const cleanText = transcript.trim();
+                    const res = event.results[i];
+                    if (res.isFinal) {
+                        const cleanText = res[0].transcript.trim();
                         if (cleanText) {
                             historyOriginal += cleanText + ". ";
                             render();
                             const translated = await fetchTranslation(cleanText);
                             historyTranslated += translated + " ";
-                            interimOriginal = "";
-                            interimTranslated = "";
+                            interimOriginal = ""; interimTranslated = "";
                             render();
                         }
                     } else {
-                        newInterim += transcript;
+                        newInterim += res[0].transcript;
                     }
                 }
-
-                if (newInterim !== interimOriginal) {
+                if (newInterim && newInterim !== interimOriginal) {
                     interimOriginal = newInterim;
                     render();
-                    if (interimOriginal.split(' ').length > 3) {
-                        translateInterim(interimOriginal);
-                    }
+                    clearTimeout(translationTimeout);
+                    translationTimeout = setTimeout(async () => {
+                        if (interimOriginal.length > 5) {
+                            interimTranslated = await fetchTranslation(interimOriginal);
+                            render();
+                        }
+                    }, 800);
                 }
             };
         }
 
-        document.addEventListener('visibilitychange', () => {
-            if (document.visibilityState === 'visible' && isListening && recognition) {
-                try { recognition.start(); } catch (e) { }
-            }
-        });
+        swapBtn.onclick = () => {
+            isEnglishToSpanish = !isEnglishToSpanish;
+            updateLabels();
+            historyOriginal = ""; historyTranslated = ""; interimOriginal = ""; interimTranslated = "";
+            render();
+            if (isListening) try { recognition.stop(); } catch (e) { }
+        };
     </script>
 </body>
 
