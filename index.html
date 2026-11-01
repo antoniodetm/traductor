@@ -87,8 +87,8 @@
             flex: 1;
             display: flex;
             flex-direction: column;
-            padding: 15px;
-            gap: 15px;
+            padding: 15px 15px 5px;
+            gap: 10px;
             overflow: hidden;
         }
 
@@ -123,7 +123,7 @@
         }
 
         p {
-            font-size: 1.3rem;
+            font-size: 1.2rem;
             line-height: 1.4;
             margin: 0;
             white-space: pre-wrap;
@@ -134,40 +134,38 @@
             font-style: italic;
         }
 
+        .log-container {
+            margin: 0 15px 10px;
+            padding: 8px;
+            background: #1c1c1e;
+            color: #32d74b;
+            font-family: 'Courier New', monospace;
+            font-size: 0.65rem;
+            border-radius: 12px;
+            height: 70px;
+            overflow-y: auto;
+            border: 1px solid #3c3c43;
+        }
+
         .footer {
             padding: 10px 20px calc(10px + var(--safe-bottom));
             background: var(--card);
             border-top: 0.5px solid #3c3c434d;
-            text-align: center;
         }
 
         .main-btn {
             width: 100%;
-            height: 60px;
+            height: 56px;
             border-radius: 16px;
             border: none;
             background: var(--primary);
             color: white;
-            font-size: 1.2rem;
+            font-size: 1.1rem;
             font-weight: 600;
         }
 
         .main-btn.listening {
             background: #ff453a;
-        }
-
-        #status {
-            font-size: 0.7rem;
-            color: #8e8e93;
-            margin-top: 5px;
-            font-weight: 500;
-        }
-
-        #debug {
-            font-size: 0.6rem;
-            color: #ff3b30;
-            margin-top: 2px;
-            display: none;
         }
     </style>
 </head>
@@ -194,10 +192,12 @@
         </div>
     </div>
 
+    <div class="log-container" id="logBox">
+        <div>> Sistema listo</div>
+    </div>
+
     <div class="footer">
         <button class="main-btn" id="listenBtn">Iniciar Escucha</button>
-        <div id="status">Listo para traducir</div>
-        <div id="debug"></div>
     </div>
 
     <script>
@@ -211,36 +211,33 @@
         const outputLabel = document.getElementById('outputLabel');
         const scrollContainer = document.getElementById('scrollContainer');
         const boxTop = document.getElementById('boxTop');
-        const statusLabel = document.getElementById('status');
-        const debugLabel = document.getElementById('debug');
+        const logBox = document.getElementById('logBox');
 
         let isEnglishToSpanish = true;
         let isListening = false;
-
         let historyOriginal = "";
         let historyTranslated = "";
         let interimOriginal = "";
         let interimTranslated = "";
-
         let translationTimeout;
 
-        // Detección de iPhone/iOS
         const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 
-        function logDebug(msg) {
-            console.log(msg);
-            debugLabel.innerText = msg;
-            debugLabel.style.display = "block";
+        function addLog(msg) {
+            const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            const entry = document.createElement('div');
+            entry.innerText = `[${time}] ${msg}`;
+            logBox.appendChild(entry);
+            logBox.scrollTop = logBox.scrollHeight;
+            if (logBox.children.length > 50) logBox.removeChild(logBox.firstChild);
         }
 
         if (!SpeechRecognition) {
-            statusLabel.innerText = "Error: Navegador incompatible";
-            translatedText.innerText = "Reconocimiento no soportado. Usa Safari en iOS o Chrome en Android.";
+            addLog("ERROR: Navegador no compatible.");
             listenBtn.disabled = true;
         }
 
-        // En iOS, continuous=true suele fallar. Usamos false y reiniciamos manualmente.
         const recognition = SpeechRecognition ? new SpeechRecognition() : null;
         if (recognition) {
             recognition.continuous = !isIOS;
@@ -255,6 +252,7 @@
             langToLabel.innerText = to;
             inputLabel.innerText = `Original (${from}):`;
             outputLabel.innerText = `Traducción (${to}):`;
+            addLog(`Idioma: ${from} -> ${to}`);
         }
 
         updateLabels();
@@ -266,17 +264,27 @@
             boxTop.scrollTop = boxTop.scrollHeight;
         }
 
-        async function fetchTranslation(text) {
+        async function fetchTranslation(text, isFinal = false) {
             if (!text.trim()) return "";
             const sl = isEnglishToSpanish ? "en" : "es";
             const tl = isEnglishToSpanish ? "es" : "en";
+            addLog(`Solicitando traducción (${isFinal ? 'Final' : 'Interina'})...`);
             try {
                 const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${sl}&tl=${tl}&dt=t&q=${encodeURIComponent(text)}`;
                 const res = await fetch(url);
-                if (res.status === 429) return "[Límite]";
+                if (res.status === 429) {
+                    addLog("ERROR 429: Límite excedido.");
+                    return "[Límite]";
+                }
                 const data = await res.json();
-                if (data && data[0]) return data[0].map(s => s[0]).join('');
-            } catch (e) { return "[Error]"; }
+                if (data && data[0]) {
+                    addLog("Traducción recibida.");
+                    return data[0].map(s => s[0]).join('');
+                }
+            } catch (e) {
+                addLog("ERROR: Fallo de conexión.");
+                return "[Error]";
+            }
             return "";
         }
 
@@ -287,14 +295,12 @@
                 render();
                 try {
                     recognition.start();
-                    isListening = true;
-                } catch (e) {
-                    logDebug("Error start: " + e.message);
-                }
+                    addLog("Micrófono iniciado.");
+                } catch (e) { addLog("ERROR start: " + e.message); }
             } else {
                 isListening = false;
                 try { recognition.stop(); } catch (e) { }
-                statusLabel.innerText = "Detenido";
+                addLog("Micrófono detenido.");
             }
         };
 
@@ -303,27 +309,26 @@
                 isListening = true;
                 listenBtn.innerText = "Detener";
                 listenBtn.classList.add('listening');
-                statusLabel.innerText = "Escuchando...";
-                debugLabel.style.display = "none";
+                addLog("Escuchando voz...");
             };
 
             recognition.onend = () => {
                 if (isListening) {
-                    // En iOS reiniciamos rápido para simular continuous
+                    addLog("Reinicio automático...");
                     setTimeout(() => {
                         if (isListening) {
-                            try { recognition.start(); } catch (e) { logDebug("Restart fail: " + e.message); }
+                            try { recognition.start(); } catch (e) { }
                         }
-                    }, 100);
+                    }, isIOS ? 100 : 250);
                 } else {
                     listenBtn.innerText = "Iniciar Escucha";
                     listenBtn.classList.remove('listening');
-                    statusLabel.innerText = "Listo";
+                    addLog("Sesión terminada.");
                 }
             };
 
             recognition.onerror = (e) => {
-                logDebug("Error: " + e.error);
+                addLog(`ERROR voz: ${e.error}`);
                 if (e.error === 'not-allowed') isListening = false;
             };
 
@@ -334,9 +339,10 @@
                     if (res.isFinal) {
                         const cleanText = res[0].transcript.trim();
                         if (cleanText) {
+                            addLog(`Frase final: "${cleanText.substring(0, 20)}..."`);
                             historyOriginal += cleanText + ". ";
                             render();
-                            const translated = await fetchTranslation(cleanText);
+                            const translated = await fetchTranslation(cleanText, true);
                             historyTranslated += translated + " ";
                             interimOriginal = ""; interimTranslated = "";
                             render();
@@ -351,10 +357,10 @@
                     clearTimeout(translationTimeout);
                     translationTimeout = setTimeout(async () => {
                         if (interimOriginal.length > 5) {
-                            interimTranslated = await fetchTranslation(interimOriginal);
+                            interimTranslated = await fetchTranslation(interimOriginal, false);
                             render();
                         }
-                    }, 800);
+                    }, 1000);
                 }
             };
         }
