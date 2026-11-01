@@ -138,6 +138,7 @@
             padding: 15px 20px calc(15px + var(--safe-bottom));
             background: var(--card);
             border-top: 0.5px solid #3c3c434d;
+            text-align: center;
         }
 
         .main-btn {
@@ -153,6 +154,13 @@
 
         .main-btn.listening {
             background: #ff453a;
+        }
+
+        #status {
+            font-size: 0.7rem;
+            color: #8e8e93;
+            margin-top: 8px;
+            font-weight: 500;
         }
     </style>
 </head>
@@ -181,6 +189,7 @@
 
     <div class="footer">
         <button class="main-btn" id="listenBtn">Iniciar Escucha</button>
+        <div id="status">Listo para traducir</div>
     </div>
 
     <script>
@@ -194,6 +203,7 @@
         const outputLabel = document.getElementById('outputLabel');
         const scrollContainer = document.getElementById('scrollContainer');
         const boxTop = document.getElementById('boxTop');
+        const statusLabel = document.getElementById('status');
 
         let isEnglishToSpanish = true;
         let isListening = false;
@@ -205,15 +215,29 @@
 
         let translationTimeout;
 
+        // Detección de soporte y protocolo seguro
+        const isSecure = window.location.protocol === 'https:' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-        const recognition = new SpeechRecognition();
-        recognition.continuous = true;
-        recognition.interimResults = true;
+
+        if (!SpeechRecognition) {
+            statusLabel.innerText = "Error: Navegador no compatible";
+            translatedText.innerText = "Tu navegador no soporta el reconocimiento de voz. Usa Chrome en Android o Safari en iOS.";
+            listenBtn.disabled = true;
+        } else if (!isSecure) {
+            statusLabel.innerText = "Error: Requiere HTTPS";
+            translatedText.innerText = "El reconocimiento de voz requiere una conexión segura (HTTPS) para funcionar en el móvil.";
+        }
+
+        const recognition = SpeechRecognition ? new SpeechRecognition() : null;
+        if (recognition) {
+            recognition.continuous = true;
+            recognition.interimResults = true;
+        }
 
         function updateLabels() {
             const from = isEnglishToSpanish ? "EN" : "ES";
             const to = isEnglishToSpanish ? "ES" : "EN";
-            recognition.lang = isEnglishToSpanish ? 'en-US' : 'es-ES';
+            if (recognition) recognition.lang = isEnglishToSpanish ? 'en-US' : 'es-ES';
             langFromLabel.innerText = from;
             langToLabel.innerText = to;
             inputLabel.innerText = `Original (${from}):`;
@@ -234,14 +258,13 @@
             isEnglishToSpanish = !isEnglishToSpanish;
             updateLabels();
             clearConversation();
-            if (isListening) try { recognition.stop(); } catch (e) { }
+            if (isListening && recognition) try { recognition.stop(); } catch (e) { }
         };
 
         function render() {
             originalText.innerHTML = historyOriginal + `<span class="interim-text">${interimOriginal}</span>`;
             translatedText.innerHTML = historyTranslated + `<span class="interim-text">${interimTranslated}</span>`;
 
-            // Auto-scroll
             scrollContainer.scrollTop = scrollContainer.scrollHeight;
             boxTop.scrollTop = boxTop.scrollHeight;
         }
@@ -253,7 +276,7 @@
             try {
                 const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${sl}&tl=${tl}&dt=t&q=${encodeURIComponent(text)}`;
                 const res = await fetch(url);
-                if (res.status === 429) return "[Error: Límite de peticiones]";
+                if (res.status === 429) return "[Límite de peticiones]";
                 const data = await res.json();
                 if (data && data[0]) return data[0].map(s => s[0]).join('');
             } catch (e) { return "[Error de conexión]"; }
@@ -270,67 +293,84 @@
         }
 
         listenBtn.onclick = () => {
+            if (!recognition) return;
             if (!isListening) {
                 clearConversation();
-                recognition.start();
+                try {
+                    recognition.start();
+                } catch (e) {
+                    statusLabel.innerText = "Error al iniciar";
+                }
             } else {
                 isListening = false;
                 recognition.stop();
+                statusLabel.innerText = "Detenido";
             }
         };
 
-        recognition.onstart = () => {
-            isListening = true;
-            listenBtn.innerText = "Detener";
-            listenBtn.classList.add('listening');
-        };
+        if (recognition) {
+            recognition.onstart = () => {
+                isListening = true;
+                listenBtn.innerText = "Detener";
+                listenBtn.classList.add('listening');
+                statusLabel.innerText = "Escuchando...";
+            };
 
-        recognition.onend = () => {
-            if (isListening) {
-                setTimeout(() => { try { recognition.start(); } catch (e) { } }, 250);
-            } else {
-                listenBtn.innerText = "Iniciar Escucha";
-                listenBtn.classList.remove('listening');
-            }
-        };
-
-        recognition.onerror = (e) => {
-            if (isListening && e.error !== 'not-allowed') {
-                setTimeout(() => { try { recognition.start(); } catch (e) { } }, 500);
-            }
-        };
-
-        recognition.onresult = async (event) => {
-            let newInterim = "";
-            for (let i = event.resultIndex; i < event.results.length; ++i) {
-                const transcript = event.results[i][0].transcript;
-                if (event.results[i].isFinal) {
-                    const cleanText = transcript.trim();
-                    if (cleanText) {
-                        historyOriginal += cleanText + ". ";
-                        render(); // Mostrar el original rápido
-                        const translated = await fetchTranslation(cleanText);
-                        historyTranslated += translated + " ";
-                        interimOriginal = "";
-                        interimTranslated = "";
-                        render();
-                    }
+            recognition.onend = () => {
+                if (isListening) {
+                    setTimeout(() => {
+                        if (isListening) try { recognition.start(); } catch (e) { }
+                    }, 250);
                 } else {
-                    newInterim += transcript;
+                    listenBtn.innerText = "Iniciar Escucha";
+                    listenBtn.classList.remove('listening');
+                    statusLabel.innerText = "Listo";
                 }
-            }
+            };
 
-            if (newInterim !== interimOriginal) {
-                interimOriginal = newInterim;
-                render();
-                if (interimOriginal.split(' ').length > 3) {
-                    translateInterim(interimOriginal);
+            recognition.onerror = (e) => {
+                console.error("Error Speech:", e.error);
+                if (e.error === 'not-allowed') {
+                    isListening = false;
+                    statusLabel.innerText = "Permiso denegado";
+                } else {
+                    statusLabel.innerText = "Error: " + e.error;
+                    if (isListening) setTimeout(() => { try { recognition.start(); } catch (e) { } }, 500);
                 }
-            }
-        };
+            };
+
+            recognition.onresult = async (event) => {
+                let newInterim = "";
+                for (let i = event.resultIndex; i < event.results.length; ++i) {
+                    const transcript = event.results[i][0].transcript;
+                    if (event.results[i].isFinal) {
+                        const cleanText = transcript.trim();
+                        if (cleanText) {
+                            historyOriginal += cleanText + ". ";
+                            render();
+                            const translated = await fetchTranslation(cleanText);
+                            historyTranslated += translated + " ";
+                            interimOriginal = "";
+                            interimTranslated = "";
+                            render();
+                        }
+                    } else {
+                        newInterim += transcript;
+                    }
+                }
+
+                if (newInterim !== interimOriginal) {
+                    interimOriginal = newInterim;
+                    render();
+                    if (interimOriginal.split(' ').length > 3) {
+                        translateInterim(interimOriginal);
+                    }
+                }
+            };
+        }
 
         document.addEventListener('visibilitychange', () => {
-            if (document.visibilityState === 'visible' && isListening) {
+            if (document.visibilityState === 'visible' && isListening && recognition) {
                 try { recognition.start(); } catch (e) { }
             }
         });
