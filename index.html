@@ -1,42 +1,66 @@
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="viewport"
+        content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <title>Traductor Bidireccional</title>
     <style>
-        :root { 
-            --primary: #0a84ff; 
-            --bg: #f2f2f7; 
-            --card: #ffffff; 
-            --text: #000000; 
-            --safe-top: env(safe-area-inset-top); 
-            --safe-bottom: env(safe-area-inset-bottom); 
+        :root {
+            --primary: #0a84ff;
+            --bg: #f2f2f7;
+            --card: #ffffff;
+            --text: #000000;
+            --safe-top: env(safe-area-inset-top);
+            --safe-bottom: env(safe-area-inset-bottom);
         }
-        @media (prefers-color-scheme: dark) { 
-            :root { --bg: #000000; --card: #1c1c1e; --text: #ffffff; } 
+
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --bg: #000000;
+                --card: #1c1c1e;
+                --text: #ffffff;
+            }
         }
-        body { 
-            font-family: -apple-system, sans-serif; 
-            background-color: var(--bg); 
-            color: var(--text); 
-            margin: 0; 
-            display: flex; 
-            flex-direction: column; 
-            height: 100vh; 
-            overflow: hidden; 
+
+        body {
+            font-family: -apple-system, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            overflow: hidden;
         }
-        .header { 
-            padding-top: calc(10px + var(--safe-top)); 
-            padding-bottom: 15px; 
-            background: var(--card); 
+
+        .header {
+            padding-top: calc(10px + var(--safe-top));
+            padding-bottom: 15px;
+            background: var(--card);
             border-bottom: 0.5px solid #3c3c434d;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .title {
+            font-size: 1rem;
+            font-weight: 600;
+            margin: 0;
+        }
+
+        .lang-selector {
             display: flex;
             justify-content: center;
             align-items: center;
             gap: 15px;
         }
+
         .lang-badge {
             padding: 8px 16px;
             background: var(--bg);
@@ -45,6 +69,7 @@
             font-size: 0.9rem;
             border: 1px solid #3c3c434d;
         }
+
         .swap-btn {
             background: var(--primary);
             color: white;
@@ -57,166 +82,259 @@
             align-items: center;
             justify-content: center;
         }
-        .content { 
-            flex: 1; 
-            display: flex; 
-            flex-direction: column; 
-            padding: 15px; 
-            gap: 15px; 
+
+        .content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            padding: 15px;
+            gap: 15px;
+            overflow: hidden;
         }
-        .box { 
-            background: var(--card); 
-            padding: 15px; 
-            border-radius: 18px; 
-            box-shadow: 0 2px 8px rgba(0,0,0,0.05); 
+
+        .box {
+            background: var(--card);
+            padding: 15px;
+            border-radius: 18px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
         }
-        .box-top { min-height: 60px; flex-shrink: 0; }
-        .box-main { 
-            flex: 1; 
-            border-left: 5px solid var(--primary); 
+
+        .box-top {
+            max-height: 25%;
             overflow-y: auto;
+            flex-shrink: 0;
         }
-        .label { 
-            font-size: 0.7rem; 
-            font-weight: 700; 
-            color: #8e8e93; 
-            text-transform: uppercase; 
-            margin-bottom: 8px; 
-            display: block; 
+
+        .box-main {
+            flex: 1;
+            border-left: 5px solid var(--primary);
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
         }
-        p { font-size: 1.3rem; line-height: 1.4; margin: 0; }
-        .footer { 
-            padding: 15px 20px calc(15px + var(--safe-bottom)); 
-            background: var(--card); 
-            border-top: 0.5px solid #3c3c434d; 
+
+        .label {
+            font-size: 0.7rem;
+            font-weight: 700;
+            color: #8e8e93;
+            text-transform: uppercase;
+            margin-bottom: 8px;
+            display: block;
         }
-        .main-btn { 
-            width: 100%; 
-            height: 64px; 
-            border-radius: 16px; 
-            border: none; 
-            background: var(--primary); 
-            color: white; 
-            font-size: 1.2rem; 
-            font-weight: 600; 
+
+        p {
+            font-size: 1.3rem;
+            line-height: 1.4;
+            margin: 0;
+            white-space: pre-wrap;
         }
-        .main-btn.listening { background: #ff453a; }
+
+        .interim-text {
+            color: #8e8e93;
+            font-style: italic;
+        }
+
+        .footer {
+            padding: 15px 20px calc(15px + var(--safe-bottom));
+            background: var(--card);
+            border-top: 0.5px solid #3c3c434d;
+        }
+
+        .main-btn {
+            width: 100%;
+            height: 64px;
+            border-radius: 16px;
+            border: none;
+            background: var(--primary);
+            color: white;
+            font-size: 1.2rem;
+            font-weight: 600;
+        }
+
+        .main-btn.listening {
+            background: #ff453a;
+        }
     </style>
 </head>
+
 <body>
 
-<div class="header">
-    <div class="lang-badge" id="langFromLabel">EN</div>
-    <button class="swap-btn" id="swapBtn">⇄</button>
-    <div class="lang-badge" id="langToLabel">ES</div>
-</div>
-
-<div class="content">
-    <div class="box box-top">
-        <span class="label" id="inputLabel">Escuchando Inglés:</span>
-        <p id="originalText" style="font-size: 1rem; color: #8e8e93;">...</p>
+    <div class="header">
+        <h1 class="title">Traductor</h1>
+        <div class="lang-selector">
+            <div class="lang-badge" id="langFromLabel">EN</div>
+            <button class="swap-btn" id="swapBtn">⇄</button>
+            <div class="lang-badge" id="langToLabel">ES</div>
+        </div>
     </div>
-    <div class="box box-main" id="scrollContainer">
-        <span class="label" id="outputLabel">Traducción Español:</span>
-        <p id="translatedText">Pulsa el botón para empezar.</p>
+
+    <div class="content">
+        <div class="box box-top" id="boxTop">
+            <span class="label" id="inputLabel">Original:</span>
+            <p id="originalText"></p>
+        </div>
+        <div class="box box-main" id="scrollContainer">
+            <span class="label" id="outputLabel">Traducción:</span>
+            <p id="translatedText"></p>
+        </div>
     </div>
-</div>
 
-<div class="footer">
-    <button class="main-btn" id="listenBtn">Iniciar Escucha</button>
-</div>
+    <div class="footer">
+        <button class="main-btn" id="listenBtn">Iniciar Escucha</button>
+    </div>
 
-<script>
-    const listenBtn = document.getElementById('listenBtn');
-    const swapBtn = document.getElementById('swapBtn');
-    const originalText = document.getElementById('originalText');
-    const translatedText = document.getElementById('translatedText');
-    const langFromLabel = document.getElementById('langFromLabel');
-    const langToLabel = document.getElementById('langToLabel');
-    const inputLabel = document.getElementById('inputLabel');
-    const outputLabel = document.getElementById('outputLabel');
+    <script>
+        const listenBtn = document.getElementById('listenBtn');
+        const swapBtn = document.getElementById('swapBtn');
+        const originalText = document.getElementById('originalText');
+        const translatedText = document.getElementById('translatedText');
+        const langFromLabel = document.getElementById('langFromLabel');
+        const langToLabel = document.getElementById('langToLabel');
+        const inputLabel = document.getElementById('inputLabel');
+        const outputLabel = document.getElementById('outputLabel');
+        const scrollContainer = document.getElementById('scrollContainer');
+        const boxTop = document.getElementById('boxTop');
 
-    let isEnglishToSpanish = true;
-    let isListening = false;
-    let lastText = "";
+        let isEnglishToSpanish = true;
+        let isListening = false;
 
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    const recognition = new SpeechRecognition();
-    recognition.continuous = true;
-    recognition.interimResults = true;
+        let historyOriginal = "";
+        let historyTranslated = "";
+        let interimOriginal = "";
+        let interimTranslated = "";
 
-    function updateLabels() {
-        if (isEnglishToSpanish) {
-            recognition.lang = 'en-US';
-            langFromLabel.innerText = "EN";
-            langToLabel.innerText = "ES";
-            inputLabel.innerText = "Escuchando Inglés:";
-            outputLabel.innerText = "Traducción Español:";
-        } else {
-            recognition.lang = 'es-ES';
-            langFromLabel.innerText = "ES";
-            langToLabel.innerText = "EN";
-            inputLabel.innerText = "Escuchando Español:";
-            outputLabel.innerText = "Traducción Inglés:";
+        let translationTimeout;
+
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        const recognition = new SpeechRecognition();
+        recognition.continuous = true;
+        recognition.interimResults = true;
+
+        function updateLabels() {
+            const from = isEnglishToSpanish ? "EN" : "ES";
+            const to = isEnglishToSpanish ? "ES" : "EN";
+            recognition.lang = isEnglishToSpanish ? 'en-US' : 'es-ES';
+            langFromLabel.innerText = from;
+            langToLabel.innerText = to;
+            inputLabel.innerText = `Original (${from}):`;
+            outputLabel.innerText = `Traducción (${to}):`;
         }
-    }
 
-    updateLabels();
-
-    swapBtn.onclick = () => {
-        isEnglishToSpanish = !isEnglishToSpanish;
         updateLabels();
-        if (isListening) {
-            recognition.stop(); // Reinicia con el nuevo idioma
-            setTimeout(() => recognition.start(), 300);
+
+        function clearConversation() {
+            historyOriginal = "";
+            historyTranslated = "";
+            interimOriginal = "";
+            interimTranslated = "";
+            render();
         }
-    };
 
-    async function traducir(texto) {
-        if (!texto || texto === lastText) return;
-        lastText = texto;
+        swapBtn.onclick = () => {
+            isEnglishToSpanish = !isEnglishToSpanish;
+            updateLabels();
+            clearConversation();
+            if (isListening) try { recognition.stop(); } catch (e) { }
+        };
 
-        const pair = isEnglishToSpanish ? "en|es" : "es|en";
-        try {
-            const res = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(texto)}&langpair=${pair}`);
-            const data = await res.json();
-            translatedText.innerText = data.responseData.translatedText;
-            document.getElementById('scrollContainer').scrollTop = document.getElementById('scrollContainer').scrollHeight;
-        } catch (e) { console.error("Error"); }
-    }
+        function render() {
+            originalText.innerHTML = historyOriginal + `<span class="interim-text">${interimOriginal}</span>`;
+            translatedText.innerHTML = historyTranslated + `<span class="interim-text">${interimTranslated}</span>`;
 
-    listenBtn.onclick = () => {
-        if (!isListening) {
-            originalText.innerText = "...";
-            translatedText.innerText = "Escuchando...";
-            recognition.start();
-        } else {
-            recognition.stop();
+            // Auto-scroll
+            scrollContainer.scrollTop = scrollContainer.scrollHeight;
+            boxTop.scrollTop = boxTop.scrollHeight;
         }
-    };
 
-    recognition.onstart = () => { 
-        isListening = true; 
-        listenBtn.innerText = "Detener"; 
-        listenBtn.classList.add('listening'); 
-    };
-    recognition.onend = () => { 
-        isListening = false; 
-        listenBtn.innerText = "Iniciar Escucha"; 
-        listenBtn.classList.remove('listening'); 
-    };
-
-    recognition.onresult = (event) => {
-        let interim = '';
-        let final = '';
-        for (let i = event.resultIndex; i < event.results.length; ++i) {
-            if (event.results[i].isFinal) final = event.results[i][0].transcript;
-            else interim += event.results[i][0].transcript;
+        async function fetchTranslation(text) {
+            if (!text.trim()) return "";
+            const sl = isEnglishToSpanish ? "en" : "es";
+            const tl = isEnglishToSpanish ? "es" : "en";
+            try {
+                const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${sl}&tl=${tl}&dt=t&q=${encodeURIComponent(text)}`;
+                const res = await fetch(url);
+                if (res.status === 429) return "[Error: Límite de peticiones]";
+                const data = await res.json();
+                if (data && data[0]) return data[0].map(s => s[0]).join('');
+            } catch (e) { return "[Error de conexión]"; }
+            return "";
         }
-        const text = final || interim;
-        originalText.innerText = text;
-        if (final !== "" || (interim.split(' ').length > 3)) traducir(text);
-    };
-</script>
+
+        async function translateInterim(text) {
+            clearTimeout(translationTimeout);
+            translationTimeout = setTimeout(async () => {
+                if (!text.trim() || !isListening) return;
+                interimTranslated = await fetchTranslation(text);
+                render();
+            }, 700);
+        }
+
+        listenBtn.onclick = () => {
+            if (!isListening) {
+                clearConversation();
+                recognition.start();
+            } else {
+                isListening = false;
+                recognition.stop();
+            }
+        };
+
+        recognition.onstart = () => {
+            isListening = true;
+            listenBtn.innerText = "Detener";
+            listenBtn.classList.add('listening');
+        };
+
+        recognition.onend = () => {
+            if (isListening) {
+                setTimeout(() => { try { recognition.start(); } catch (e) { } }, 250);
+            } else {
+                listenBtn.innerText = "Iniciar Escucha";
+                listenBtn.classList.remove('listening');
+            }
+        };
+
+        recognition.onerror = (e) => {
+            if (isListening && e.error !== 'not-allowed') {
+                setTimeout(() => { try { recognition.start(); } catch (e) { } }, 500);
+            }
+        };
+
+        recognition.onresult = async (event) => {
+            let newInterim = "";
+            for (let i = event.resultIndex; i < event.results.length; ++i) {
+                const transcript = event.results[i][0].transcript;
+                if (event.results[i].isFinal) {
+                    const cleanText = transcript.trim();
+                    if (cleanText) {
+                        historyOriginal += cleanText + ". ";
+                        render(); // Mostrar el original rápido
+                        const translated = await fetchTranslation(cleanText);
+                        historyTranslated += translated + " ";
+                        interimOriginal = "";
+                        interimTranslated = "";
+                        render();
+                    }
+                } else {
+                    newInterim += transcript;
+                }
+            }
+
+            if (newInterim !== interimOriginal) {
+                interimOriginal = newInterim;
+                render();
+                if (interimOriginal.split(' ').length > 3) {
+                    translateInterim(interimOriginal);
+                }
+            }
+        };
+
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible' && isListening) {
+                try { recognition.start(); } catch (e) { }
+            }
+        });
+    </script>
 </body>
+
 </html>
